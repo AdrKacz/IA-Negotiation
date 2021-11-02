@@ -30,6 +30,19 @@ class Environment(metaclass=Singleton):
 
         self.state = None
 
+        # Buyer and Seller
+        buyer, seller = Agent('buyer'), Agent('seller')
+
+    def train(self):
+        # TODO: Implement training of both Buyer and Seller
+        # offer = seller.get_offer()
+        # if offer <= 0: break
+        # buyer.set_offer(offer)
+        # offer = buyer.get_offer()
+        # if offer <= 0: break
+        # seller.set_offer(offer)
+        pass
+
     def reset(self):
         # TODO: Implement reset
         self.state = 0
@@ -115,5 +128,4 @@ class Agent:
 
 if __name__ == '__main__':
     environment = Environment()
-    seller, buyer = Agent('seller'), Agent('buyer')
-    seller.train()
+    environment.train()
