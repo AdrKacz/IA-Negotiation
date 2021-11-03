@@ -19,112 +19,151 @@ class Environment(metaclass=Singleton):
         # 1 <= i <= n : offer ; 0 : accept : -1 : reject
         self.action_space = [i + 1 for i in range(self.price_space_size)] + [0, -1]
 
-        # States (2 * P * T)
+        self.action_space_size = len(self.action_space)
+
+        # States (P * T + 2 * T + 1)
         # price.time (for each price and for each time)
         # validate.price.time (for each price and for each time)
+        # reject.price.time (for each price and for each time)
         # Action 0 -> validate.price.time
         # Action i -> validate.i.time if env (the other agent) accept the offer
-        self.state_space = [f'{i + 1}.{j}' for i in range(self.price_space_size) for j in range(self.time_space_size)] + [f'v.{i + 1}.{j}' for i in range(self.price_space_size) for j in range(self.time_space_size)]
+        # Start state s
+        offer_states = [f'{i + 1}.{j}' for i in range(self.price_space_size) for j in range(self.time_space_size)]
+        validate_states = [f'v.{j}' for j in range(self.time_space_size)]
+        reject_states = [f'r.{j}' for j in range(self.time_space_size)]
+        self.state_space = ['s'] + offer_states + validate_states + reject_states
+
+        self.state_space_size = len(self.state_space)
 
         self.reward_mapping = {}
 
         self.state = None
+        self.time_step = 0
 
         # Buyer and Seller
-        buyer, seller = Agent('buyer'), Agent('seller')
+        self.buyer, self.seller = Agent(), Agent()
 
     def train(self):
-        # TODO: Implement training of both Buyer and Seller
-        # offer = seller.get_offer()
-        # if offer <= 0: break
-        # buyer.set_offer(offer)
-        # offer = buyer.get_offer()
-        # if offer <= 0: break
-        # seller.set_offer(offer)
-        pass
+        # Initialise Q-Tables
+        self.seller.initialise_q_table(self.action_space_size, self.state_space_size)
+
+        self.buyer.initialise_q_table(self.action_space_size, self.state_space_size)
+
+        # Q-Learning Algorithm
+        for episode in range(Agent.num_episodes):
+            self.reset()
+            for step in range(2 * self.time_space_size):
+                agent_from, agent_to = self.seller, self.buyer
+                if step % 2 == 1:
+                    agent_from, agent_to = agent_to, agent_from
+                action_index = agent_from.act()
+                step_return = self.step(self.action_space[action_index])
+                agent_to.update_state(step_return)
+
+                if step_return['done']:
+                    break
+
+                if step % 2 == 1:
+                    self.time_step += 1
+            self.seller.exploration_decay(episode)
+            self.buyer.exploration_decay(episode)
 
     def reset(self):
-        # TODO: Implement reset
-        self.state = 0
-        return self.state
+        self.time_step = 0
+
+        self.seller.reset()
+        self.seller.state = self.state_space.index('s')
+        self.seller.current_reward = 0
+
+        self.buyer.reset()
+        self.buyer.state = self.state_space.index('s')
+        self.buyer.current_reward = 0
 
     def step(self, action):
-        # TODO: Different seller / buyer
+        # TODO: Dissociate Reward for Seller and Buyer
+        # NOTE: Reward based on previous state to maximise profit
+
+        new_state_string, reward, done, info = None, 0, False, ''
+
+        new_state_string = f'{self.time_step}'
+        if action == -1:
+            new_state_string = f'r.{new_state_string}'
+            done = True
+        elif action == 0:
+            new_state_string = f'v.{new_state_string}'
+            done = True
+        else:
+            new_state_string = f'{action}.{new_state_string}'
+
         return {
-        'new_state': 0,
-        'reward': 0,
-        'done': False,
-        'info': '',
+        'new_state': self.state_space.index(new_state_string),
+        'reward': reward,
+        'done': done,
+        'info': info,
         }
 
 class Agent:
-    def __init__(self, type):
-        assert type in ['seller', 'buyer']
+    num_episodes = int(1e4)
+    max_steps_per_episode = 100
 
-        self.num_episodes = int(1e4)
-        self.max_steps_per_episode = 100
+    learning_rate = 0.1
+    discount_rate = 0.99
 
-        self.learning_rate = 0.1
-        self.discount_rate = 0.99
+    max_exploration_rate = 1
+    min_exploration_rate = 0.1
+    exploration_rate_decay = 0.001
 
-        self.max_exploration_rate = 1
-        self.min_exploration_rate = 0.1
-        self.exploration_rate_decay = 0.001
+    def __init__(self):
+        self.action_space_size = None
+        self.state_space_size = None
+        self.q_table = None
+        self.state = None
+        self.last_action_index = None
+        self.current_reward = 0
+        self.exploration_rate = Agent.max_exploration_rate
 
-        self.action_space_size = len(Environment._instances[Environment].action_space)
-        self.state_space_size = len(Environment._instances[Environment].state_space)
 
-        self.q_table = [[0 for j in range(self.action_space_size)] for i in range(self.state_space_size)]
+    def initialise_q_table(self, action_space_size, state_space_size):
+        self.action_space_size = action_space_size
+        self.state_space_size = state_space_size
 
+        self.q_table = [[0 for j in range(action_space_size)] for i in range(state_space_size)]
 
-    def train(self):
-        # TODO: Concurrent learning seller / agent
-        env = Environment._instances[Environment]
+        self.reset()
 
-        # Re-Initialise Q-Table
-        for i in range(len(self.q_table)):
-            for j in range(len(self.q_table[i])):
-                self.q_table[i][j] = 0
+    def reset(self):
+        self.state = None
+        self.last_action_index = None
+        self.current_reward = 0
+        self.exploration_rate = Agent.max_exploration_rate
 
-        # Q-Learning Algorithm
-        rewards_all_episodes = list()
-        exploration_rate = self.max_exploration_rate
+    def update_state(self, step_return):
+        if not self.state:
+            return
+        new_state = step_return['new_state']
 
-        for episode in range(self.num_episodes):
-            state = env.reset()
-            reward_current_episode = 0
-            for step in range(self.max_steps_per_episode):
-                action_index = None
-                # Exploration versus Exploitation
-                if random() > exploration_rate: # Exploitation
-                    action_index = self.exploit()
-                else:
-                    action_index = randrange(0, self.action_space_size)
-                action = env.action_space[action_index]
+        # Update Q-table Q(state, action)
+        self.q_table[self.state][self.last_action_index] = self.q_table[self.state][self.last_action_index] * (1 - self.learning_rate) + self.learning_rate * (step_return['reward'] + self.discount_rate * max(self.q_table[new_state]))
 
-                step_return = env.step(action)
+        self.state = new_state
 
-                new_state = step_return['new_state']
+    def act(self):
+        action_index = None
+        # Exploration versus Exploitation
+        if random() > self.exploration_rate: # Exploitation
+            action_index = self.exploit()
+        else:
+            action_index = randrange(0, self.action_space_size)
+        self.last_action_index = action_index
+        return action_index
 
-                # Update Q-table Q(state, action)
-                self.q_table[state][action_index] = self.q_table[state][action_index] * (1 - self.learning_rate) + self.learning_rate * (step_return['reward'] + self.discount_rate * max(self.q_table[new_state]))
-
-                state = new_state
-                if step_return['done']:
-                    reward_current_episode += step_return['reward']
-                    break
-
-            # exploration_rate decay
-            exploration_rate = self.min_exploration_rate + (self.max_exploration_rate - self.min_exploration_rate) * exp(-self.exploration_rate_decay * episode)
-            rewards_all_episodes.append(reward_current_episode)
-
-        return rewards_all_episodes
+    def exploration_decay(self, episode):
+        self.exploration_rate = Agent.min_exploration_rate + (Agent.max_exploration_rate - Agent.min_exploration_rate) * exp(-Agent.exploration_rate_decay * episode)
 
     def exploit(self):
         state = Environment._instances[Environment].state
         action_index = self.q_table[state].index(max(self.q_table[state]))
         return action_index
-
 
 if __name__ == '__main__':
     environment = Environment()
