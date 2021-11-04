@@ -64,7 +64,7 @@ class Environment(metaclass=Singleton):
                 # print('\n=====')
                 for step in range(self.time_space_size):
                     action_index = trainee.act()
-                    step_return = self.step(self.action_space[action_index])
+                    step_return = self.step(self.action_space[action_index], trainee)
 
                     if step_return['done']:
                         if step_return['info'] == 'validated':
@@ -77,7 +77,7 @@ class Environment(metaclass=Singleton):
                     trainer.state = step_return['new_state']
                     action_index = trainer.exploit()
 
-                    step_return = self.step(self.action_space[action_index])
+                    step_return = self.step(self.action_space[action_index], trainee)
                     trainee.update_state(step_return)
 
                     if step_return['done']:
@@ -118,11 +118,11 @@ class Environment(metaclass=Singleton):
         self.buyer.state = self.state_space.index('s')
         self.buyer.current_reward = 0
 
-    def step(self, action):
+    def step(self, action, agent=None):
         # TODO: Dissociate Reward for Seller and Buyer
         # NOTE: Reward based on previous state to maximise profit
 
-        new_state_string, reward, done, info = None, 0, False, ''
+        new_state_string, done, info = None, False, ''
 
         new_state_string = f'{self.time_step}'
         if action == -1:
@@ -132,14 +132,13 @@ class Environment(metaclass=Singleton):
         elif action == 0:
             new_state_string = 'd'
             done = True
-            reward = 1
             info = 'validated'
         else:
             new_state_string = f'{action}.{new_state_string}'
 
         return {
         'new_state': self.state_space.index(new_state_string),
-        'reward': reward,
+        'reward': agent.get_reward(new_state_string) if agent else 0,
         'done': done,
         'info': info,
         }

@@ -80,9 +80,18 @@ class Agent:
 
 
 class Buyer(Agent):
+    def get_reward(self, state_string):
+        if state_string == 'd' and self.last_action_index == 5:
+            return 1
+        return 0
     def __str__(self):
         return 'Buyer'
 
 class Seller(Agent):
+    def get_reward(self, state_string):
+        if state_string == 'd' and self.last_action_index == 6:
+            return 1
+        return 0
+
     def __str__(self):
         return 'Seller'
