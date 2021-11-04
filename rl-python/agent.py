@@ -2,9 +2,6 @@ from random import random, randrange
 from math import exp
 
 class Agent:
-    num_episodes = int(1e4)
-    max_steps_per_episode = 100
-
     learning_rate = 0.1
     discount_rate = 0.99
 
@@ -37,16 +34,28 @@ class Agent:
         self.exploration_rate = Agent.max_exploration_rate
 
     def update_state(self, step_return):
-        if not self.state:
+        if self.last_action_index ==  None:
+            self.state = step_return['new_state']
             return
-        new_state = step_return['new_state']
 
+        # ### Helper
+        # offer_states = [f'{price + 1}.{time}' for time in range(5) for price in range(5)]
+        # validate_states = [f'v.{j}' for j in range(5)]
+        # reject_states = [f'r.{j}' for j in range(5)]
+        # state_space = ['s'] + offer_states + validate_states + reject_states
+        # if self.state == 0:
+        #     print(f'Update from {state_space[self.state]}', self)
+        # else:
+        #     print(f'Update from {state_space[self.state]}', self)
+        # ###
+        new_state = step_return['new_state']
         # Update Q-table Q(state, action)
         self.q_table[self.state][self.last_action_index] = self.q_table[self.state][self.last_action_index] * (1 - self.learning_rate) + self.learning_rate * (step_return['reward'] + self.discount_rate * max(self.q_table[new_state]))
 
         self.state = new_state
 
     def act(self):
+        # print('Act', self)
         action_index = None
         # Exploration versus Exploitation
         if random() > self.exploration_rate: # Exploitation
@@ -60,8 +69,7 @@ class Agent:
         self.exploration_rate = Agent.min_exploration_rate + (Agent.max_exploration_rate - Agent.min_exploration_rate) * exp(-Agent.exploration_rate_decay * episode)
 
     def exploit(self):
-        state = Environment._instances[Environment].state
-        action_index = self.q_table[state].index(max(self.q_table[state]))
+        action_index = self.q_table[self.state].index(max(self.q_table[self.state]))
         return action_index
 
     def print_q_table(self):
@@ -72,7 +80,9 @@ class Agent:
 
 
 class Buyer(Agent):
-    pass
+    def __str__(self):
+        return 'Buyer'
 
 class Seller(Agent):
-    pass
+    def __str__(self):
+        return 'Seller'

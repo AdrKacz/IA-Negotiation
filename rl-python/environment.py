@@ -1,4 +1,4 @@
-from agent import Agent, Buyer, Seller
+from agent import Buyer, Seller
 
 class Singleton(type):
     # Use cls._instances[cls] to get instance if any
@@ -10,6 +10,11 @@ class Singleton(type):
 
 class Environment(metaclass=Singleton):
     def __init__(self):
+        # Training Information
+        self.num_cycles = int(1e1)
+        self.num_episodes = int(1e3)
+
+
         # Complexity : price_space_size = P , time_space_size = T
         self.price_space_size = 5
         self.time_space_size = 5
@@ -27,10 +32,8 @@ class Environment(metaclass=Singleton):
         # Action 0 -> validate.price.time
         # Action i -> validate.i.time if env (the other agent) accept the offer
         # Start state s
-        offer_states = [f'{i + 1}.{j}' for i in range(self.price_space_size) for j in range(self.time_space_size)]
-        validate_states = [f'v.{j}' for j in range(self.time_space_size)]
-        reject_states = [f'r.{j}' for j in range(self.time_space_size)]
-        self.state_space = ['s'] + offer_states + validate_states + reject_states
+        offer_states = [f'{price + 1}.{time}' for time in range(self.time_space_size) for price in range(self.price_space_size)]
+        self.state_space = ['s'] + offer_states + ['d']
 
         self.state_space_size = len(self.state_space)
 
@@ -43,6 +46,8 @@ class Environment(metaclass=Singleton):
         self.buyer, self.seller = Buyer(), Seller()
 
     def train(self):
+        # Train Seller then Buyer alternatively
+
         # Initialise Q-Tables
         self.seller.initialise_q_table(self.action_space_size, self.state_space_size)
 
@@ -51,33 +56,45 @@ class Environment(metaclass=Singleton):
         transactions_rejected = 0
         transactions_validated = 0
         # Q-Learning Algorithm
-        for episode in range(Agent.num_episodes):
-            self.reset()
-            for step in range(2 * self.time_space_size):
-                agent_from, agent_to = self.seller, self.buyer
-                if step % 2 == 1:
-                    agent_from, agent_to = agent_to, agent_from
-                action_index = agent_from.act()
-                step_return = self.step(self.action_space[action_index])
-                agent_to.update_state(step_return)
+        trainee, trainer = self.buyer, self.seller
+        for cycle in range(self.num_cycles):
+            trainee, trainer = trainer, trainee
+            for episode in range(self.num_episodes):
+                self.reset()
+                # print('\n=====')
+                for step in range(self.time_space_size):
+                    action_index = trainee.act()
+                    step_return = self.step(self.action_space[action_index])
 
-                if step_return['done']:
-                    if step_return['info'] == 'validated':
-                        transactions_validated += 1
-                    elif step_return['info'] == 'requested':
-                        transactions_rejected += 1
-                    break
+                    if step_return['done']:
+                        if step_return['info'] == 'validated':
+                            transactions_validated += 1
+                        elif step_return['info'] == 'rejected':
+                            transactions_rejected += 1
+                        trainee.update_state(step_return)
+                        break
 
-                if step % 2 == 1:
+                    trainer.state = step_return['new_state']
+                    action_index = trainer.exploit()
+
+                    step_return = self.step(self.action_space[action_index])
+                    trainee.update_state(step_return)
+
+                    if step_return['done']:
+                        if step_return['info'] == 'validated':
+                            transactions_validated += 1
+                        elif step_return['info'] == 'rejected':
+                            transactions_rejected += 1
+                        break
+
                     self.time_step += 1
-            self.seller.exploration_decay(episode)
-            self.buyer.exploration_decay(episode)
+                trainee.exploration_decay(episode)
 
         # Display result
         print('===== ' * 5)
-        print(f'Transactions\t\t: {Agent.num_episodes:5d}')
-        print(f'Transactions Validated\t: {transactions_validated:5d}')
-        print(f'Transactions Rejected\t: {transactions_rejected:5d}')
+        print(f'Transactions\t\t: {self.num_cycles * self.num_episodes:6d}')
+        print(f'Transactions Validated\t: {transactions_validated:6d}')
+        print(f'Transactions Rejected\t: {transactions_rejected:6d}')
         print('===== ' * 5)
         print('      Seller Q-Table\t\t\t\t \t Buyer Q-Table ')
         to_string = lambda row : ' '.join(map(lambda x:f'{x:>4}', row))
@@ -86,7 +103,8 @@ class Environment(metaclass=Singleton):
             state = self.state_space[i]
             seller_row = self.seller.q_table[i]
             buyer_row = self.buyer.q_table[i]
-            to_string = lambda row : ' '.join(map(lambda x:f'{x:.2f}', row))
+            normalise = lambda row : [(v - min(row)) / (max(row) - min(row)) if max(row) > min(row) else v for v in row]
+            to_string = lambda row : ' '.join(map(lambda x:f'{str(x)[:4]:>4}', normalise(row)))
             print(f'{state:>3}', '>', to_string(seller_row), '\t|\t', to_string(buyer_row))
 
     def reset(self):
@@ -108,16 +126,15 @@ class Environment(metaclass=Singleton):
 
         new_state_string = f'{self.time_step}'
         if action == -1:
-            new_state_string = f'r.{new_state_string}'
+            new_state_string = 'd'
             done = True
             info = 'rejected'
         elif action == 0:
-            new_state_string = f'v.{new_state_string}'
+            new_state_string = 'd'
             done = True
             reward = 1
             info = 'validated'
         else:
-            reward = 10
             new_state_string = f'{action}.{new_state_string}'
 
         return {
