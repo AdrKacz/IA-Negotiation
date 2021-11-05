@@ -15,11 +15,12 @@ class Agent:
         self.q_table = None
         self.state = None
         self.last_action_index = None
-        self.current_reward = 0
         self.exploration_rate = Agent.max_exploration_rate
 
 
     def initialise_q_table(self, action_space_size, state_space_size):
+        self.exploration_rate = Agent.max_exploration_rate
+
         self.action_space_size = action_space_size
         self.state_space_size = state_space_size
 
@@ -30,45 +31,46 @@ class Agent:
     def reset(self):
         self.state = None
         self.last_action_index = None
-        self.current_reward = 0
-        self.exploration_rate = Agent.max_exploration_rate
 
     def update_state(self, step_return):
         if self.last_action_index ==  None:
             raise ValueError('Cannot update Q-Table if no action has been made')
 
-        # ### Helper
-        # offer_states = [f'{price + 1}.{time}' for time in range(5) for price in range(5)]
-        # validate_states = [f'v.{j}' for j in range(5)]
-        # reject_states = [f'r.{j}' for j in range(5)]
-        # state_space = ['s'] + offer_states + validate_states + reject_states
-        # if self.state == 0:
-        #     print(f'Update from {state_space[self.state]}', self)
-        # else:
-        #     print(f'Update from {state_space[self.state]}', self)
-        # ###
+
         new_state = step_return['new_state']
         # Update Q-table Q(state, action)
         self.q_table[self.state][self.last_action_index] = self.q_table[self.state][self.last_action_index] * (1 - self.learning_rate) + self.learning_rate * (step_return['reward'] + self.discount_rate * max(self.q_table[new_state]))
 
+        if 16 <= self.state <= 25:
+            print(f'[{self}] Update Q-Table from ({self.state}, {self.last_action_index}) : State ({new_state})')
         self.state = new_state
 
     def act(self):
-        # print('Act', self)
         action_index = None
         # Exploration versus Exploitation
         if random() > self.exploration_rate: # Exploitation
             action_index = self.exploit()
-        else:
-            action_space_size = self.action_space_size
-            if self.state == 0:
-                action_space_size -= 2
-            action_index = randrange(0, action_space_size)
+        else: # Exploration
+            from_action, to_action = self.dynamic_action_space()
+            action_index = randrange(from_action, to_action)
+        if 16 <= self.state <= 25:
+            print(f'[{self}] Act from ({self.state}, {self.last_action_index}) : Action ({action_index})')
         self.last_action_index = action_index
         return action_index
 
     def exploration_decay(self, episode):
         self.exploration_rate = Agent.min_exploration_rate + (Agent.max_exploration_rate - Agent.min_exploration_rate) * exp(-Agent.exploration_rate_decay * episode)
+
+    def dynamic_action_space(self):
+        # Must do an offer at first
+        # Must accept or reject if last round
+        from_action, to_action = 0, self.action_space_size
+        if self.state == 0: # Start
+            to_action -= 2 # Remove Validate and Reject
+        elif self.state_space_size + 1 - self.action_space_size <= self.state < self.state_space_size - 1: # Last round
+            from_action += self.action_space_size - 2 # Remove offer action
+
+        return from_action, to_action
 
     def exploit(self, overwrite_q_table=None):
         q_table = self.q_table
@@ -77,15 +79,13 @@ class Agent:
         # Get one of the max (to avoid bias if not enough trained yet)
         action_indices, action_value = list(), -float('inf')
 
-        action_space_size = self.action_space_size
-        if self.state == 0:
-            action_space_size -= 2
-        for index, value in enumerate(q_table[self.state][:action_space_size]):
+        from_action, to_action = self.dynamic_action_space()
+        for index, value in enumerate(q_table[self.state][from_action:to_action]):
             if value > action_value:
                 action_value = value
-                action_indices = [index]
+                action_indices = [index + from_action]
             elif value == action_value:
-                action_indices.append(index)
+                action_indices.append(index + from_action)
         # Return one at random
         return choice(action_indices)
 
@@ -97,16 +97,19 @@ class Agent:
 
 
 class Buyer(Agent):
-    def get_reward(self, state_string):
-        if state_string == 'd' and self.last_action_index == 5:
+    def get_reward(self, step_return_without_reward):
+        info = step_return_without_reward['info']
+        if info == 'validated':
             return 1
         return 0
+
     def __str__(self):
         return 'Buyer'
 
 class Seller(Agent):
-    def get_reward(self, state_string):
-        if state_string == 'd' and self.last_action_index == 5:
+    def get_reward(self, step_return_without_reward):
+        info = step_return_without_reward['info']
+        if info == 'validated':
             return 1
         return 0
 

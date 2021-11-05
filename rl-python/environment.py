@@ -71,10 +71,11 @@ class Environment(metaclass=Singleton):
                 raise ValueError('Must do an offer at first')
 
         for cycle in range(self.num_cycles):
+            print('===== New Cycle', cycle)
             for episode in range(self.num_episodes):
                 self.reset()
-                # print('\n=====')
-                if False:
+                is_trainer_first = episode % 2 == 0
+                if is_trainer_first:
                     trainer_first()
                 for step in range(self.time_space_size):
                     action_index = trainee.act()
@@ -88,9 +89,11 @@ class Environment(metaclass=Singleton):
                         trainee.update_state(step_return)
                         break
 
+                    if is_trainer_first:
+                        self.time_step += 1
+
                     trainer.state = step_return['new_state']
                     action_index = trainer.exploit(overwrite_q_table=trainer_q_table)
-
                     step_return = self.step(self.action_space[action_index], trainee)
                     trainee.update_state(step_return)
 
@@ -101,7 +104,11 @@ class Environment(metaclass=Singleton):
                             transactions_rejected += 1
                         break
 
-                    self.time_step += 1
+                    if not is_trainer_first:
+                        self.time_step += 1
+
+                if self.time_step >= self.time_space_size:
+                    raise ValueError('No one close the transaction before end')
 
                 trainee.exploration_decay(episode)
             # Switch Trainee and Trainer (cache trainer copy from previous trainee training)
@@ -115,37 +122,37 @@ class Environment(metaclass=Singleton):
         print(f'Transactions Validated\t: {transactions_validated:6d}')
         print(f'Transactions Rejected\t: {transactions_rejected:6d}')
         print('\n', '===== ' * 5)
-        print('      Seller Raw Q-Table\t\t\t\t\t \t Buyer Raw Q-Table ')
+        print(' ' * 10, 'Seller Raw Q-Table\t\t\t\t \t Buyer Raw Q-Table ')
         # Print action space
-        to_string = lambda row : ' '.join(map(lambda x:f'{x:>7}', row))
-        print('   ', ' ', to_string(self.action_space), '\t|\t', to_string(self.action_space))
+        to_string = lambda row : ' '.join(map(lambda x:f'{x:>5}', row))
+        print(' ' * 10, to_string(self.action_space), '\t|\t', to_string(self.action_space))
 
         # Raw Q-Tables
         for i in range(len(self.seller.q_table)):
             state = self.state_space[i]
             seller_row = self.seller.q_table[i]
             buyer_row = self.buyer.q_table[i]
-            to_string = lambda row : ' '.join(map(lambda x:f'{x:.1e}' if x != 0 else '       ', row))
+            to_string = lambda row : ' '.join(map(lambda x:f'{x:.0e}' if x != 0 else ' ' * 5, row))
 
-            print(f'{state:>3}', '>', to_string(seller_row), '\t|\t', to_string(buyer_row))
+            print(f'[{i:2d}] {state:>3}', '>', to_string(seller_row), '\t|\t', to_string(buyer_row))
 
         # Softmax Q-Tables
         if not display_softmax:
             return
         print('\n', '===== ' * 5)
-        print('      Seller Softmax Q-Table\t\t \t Buyer Softmax Q-Table ')
+        print(' ' * 10, 'Seller Softmax Q-Table\t\t \t Buyer Softmax Q-Table ')
         # Print action space
         to_string = lambda row : ' '.join(map(lambda x:f'{x:>3}', row))
-        print('   ', ' ', to_string(self.action_space), '\t|\t', to_string(self.action_space))
+        print(' ' * 10, to_string(self.action_space), '\t|\t', to_string(self.action_space))
 
-        softmax = lambda row : [exp(v) / sum([exp(w) for w in row]) for v in row]
-        to_string_hidden = lambda row : [f'{v:.2f}' for v in softmax(row)]
+        softmax = lambda row : [v / sum(row) if sum(row) > 0 else 0 for v in row]
+        to_string_hidden = lambda row : [f'{v:.2f}' if v > 0 else '   ' for v in softmax(row)]
         to_string = lambda row : ' '.join(map(lambda x:f'{x[1:]:>3}', to_string_hidden(row)))
         for i in range(len(self.seller.q_table)):
             state = self.state_space[i]
             seller_row = self.seller.q_table[i]
             buyer_row = self.buyer.q_table[i]
-            print(f'{state:>3}', '>', to_string(seller_row), '\t|\t', to_string(buyer_row))
+            print(f'[{i:2d}] {state:>3}', '>', to_string(seller_row), '\t|\t', to_string(buyer_row))
 
     def reset(self):
         self.time_step = 0
@@ -176,9 +183,12 @@ class Environment(metaclass=Singleton):
         else:
             new_state_string = f'{action}.{new_state_string}'
 
-        return {
+        step_return_without_reward = {
         'new_state': self.state_space.index(new_state_string),
-        'reward': agent.get_reward(new_state_string) if agent else 0,
         'done': done,
         'info': info,
+        }
+        return {
+            **step_return_without_reward,
+            'reward': agent.get_reward(step_return_without_reward) if agent else 0,
         }
