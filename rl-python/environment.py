@@ -60,10 +60,22 @@ class Environment(metaclass=Singleton):
         # Q-Learning Algorithm
         trainee, trainer = self.seller, self.buyer
         trainee_q_table, trainer_q_table = deepcopy(trainee.q_table), deepcopy(trainer.q_table)
+
+        def trainer_first():
+            # Trainer Start Negociation
+            action_index = trainer.exploit(overwrite_q_table=trainer_q_table)
+            step_return = self.step(self.action_space[action_index], trainee)
+            trainee.state = step_return['new_state']
+
+            if step_return['done']:
+                raise ValueError('Must do an offer at first')
+
         for cycle in range(self.num_cycles):
             for episode in range(self.num_episodes):
                 self.reset()
                 # print('\n=====')
+                if False:
+                    trainer_first()
                 for step in range(self.time_space_size):
                     action_index = trainee.act()
                     step_return = self.step(self.action_space[action_index], trainee)
@@ -90,6 +102,7 @@ class Environment(metaclass=Singleton):
                         break
 
                     self.time_step += 1
+
                 trainee.exploration_decay(episode)
             # Switch Trainee and Trainer (cache trainer copy from previous trainee training)
             trainer_q_table = deepcopy(trainer.q_table)
@@ -112,7 +125,6 @@ class Environment(metaclass=Singleton):
             state = self.state_space[i]
             seller_row = self.seller.q_table[i]
             buyer_row = self.buyer.q_table[i]
-
             to_string = lambda row : ' '.join(map(lambda x:f'{x:.1e}' if x != 0 else '       ', row))
 
             print(f'{state:>3}', '>', to_string(seller_row), '\t|\t', to_string(buyer_row))
@@ -128,7 +140,7 @@ class Environment(metaclass=Singleton):
 
         softmax = lambda row : [exp(v) / sum([exp(w) for w in row]) for v in row]
         to_string_hidden = lambda row : [f'{v:.2f}' for v in softmax(row)]
-        to_string = lambda row : ' '.join(map(lambda x:f'{x[1:]:>2}', to_string_hidden(row)))
+        to_string = lambda row : ' '.join(map(lambda x:f'{x[1:]:>3}', to_string_hidden(row)))
         for i in range(len(self.seller.q_table)):
             state = self.state_space[i]
             seller_row = self.seller.q_table[i]

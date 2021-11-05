@@ -35,8 +35,7 @@ class Agent:
 
     def update_state(self, step_return):
         if self.last_action_index ==  None:
-            self.state = step_return['new_state']
-            return
+            raise ValueError('Cannot update Q-Table if no action has been made')
 
         # ### Helper
         # offer_states = [f'{price + 1}.{time}' for time in range(5) for price in range(5)]
@@ -61,7 +60,10 @@ class Agent:
         if random() > self.exploration_rate: # Exploitation
             action_index = self.exploit()
         else:
-            action_index = randrange(0, self.action_space_size)
+            action_space_size = self.action_space_size
+            if self.state == 0:
+                action_space_size -= 2
+            action_index = randrange(0, action_space_size)
         self.last_action_index = action_index
         return action_index
 
@@ -74,7 +76,11 @@ class Agent:
             q_table = overwrite_q_table
         # Get one of the max (to avoid bias if not enough trained yet)
         action_indices, action_value = list(), -float('inf')
-        for index, value in enumerate(q_table[self.state]):
+
+        action_space_size = self.action_space_size
+        if self.state == 0:
+            action_space_size -= 2
+        for index, value in enumerate(q_table[self.state][:action_space_size]):
             if value > action_value:
                 action_value = value
                 action_indices = [index]
