@@ -1,4 +1,4 @@
-from random import random, randrange
+from random import random, randrange, choice
 from math import exp
 
 class Agent:
@@ -68,9 +68,20 @@ class Agent:
     def exploration_decay(self, episode):
         self.exploration_rate = Agent.min_exploration_rate + (Agent.max_exploration_rate - Agent.min_exploration_rate) * exp(-Agent.exploration_rate_decay * episode)
 
-    def exploit(self):
-        action_index = self.q_table[self.state].index(max(self.q_table[self.state]))
-        return action_index
+    def exploit(self, overwrite_q_table=None):
+        q_table = self.q_table
+        if overwrite_q_table:
+            q_table = overwrite_q_table
+        # Get one of the max (to avoid bias if not enough trained yet)
+        action_indices, action_value = list(), -float('inf')
+        for index, value in enumerate(q_table[self.state]):
+            if value > action_value:
+                action_value = value
+                action_indices = [index]
+            elif value == action_value:
+                action_indices.append(index)
+        # Return one at random
+        return choice(action_indices)
 
     def print_q_table(self):
         if not self.q_table:
@@ -89,7 +100,7 @@ class Buyer(Agent):
 
 class Seller(Agent):
     def get_reward(self, state_string):
-        if state_string == 'd' and self.last_action_index == 6:
+        if state_string == 'd' and self.last_action_index == 5:
             return 1
         return 0
 

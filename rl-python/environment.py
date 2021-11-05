@@ -1,4 +1,6 @@
 from agent import Buyer, Seller
+from copy import deepcopy
+from math import exp
 
 class Singleton(type):
     # Use cls._instances[cls] to get instance if any
@@ -45,7 +47,7 @@ class Environment(metaclass=Singleton):
         # Buyer and Seller
         self.buyer, self.seller = Buyer(), Seller()
 
-    def train(self):
+    def train(self, display_softmax=False):
         # Train Seller then Buyer alternatively
 
         # Initialise Q-Tables
@@ -56,9 +58,9 @@ class Environment(metaclass=Singleton):
         transactions_rejected = 0
         transactions_validated = 0
         # Q-Learning Algorithm
-        trainee, trainer = self.buyer, self.seller
+        trainee, trainer = self.seller, self.buyer
+        trainee_q_table, trainer_q_table = deepcopy(trainee.q_table), deepcopy(trainer.q_table)
         for cycle in range(self.num_cycles):
-            trainee, trainer = trainer, trainee
             for episode in range(self.num_episodes):
                 self.reset()
                 # print('\n=====')
@@ -75,7 +77,7 @@ class Environment(metaclass=Singleton):
                         break
 
                     trainer.state = step_return['new_state']
-                    action_index = trainer.exploit()
+                    action_index = trainer.exploit(overwrite_q_table=trainer_q_table)
 
                     step_return = self.step(self.action_space[action_index], trainee)
                     trainee.update_state(step_return)
@@ -89,22 +91,48 @@ class Environment(metaclass=Singleton):
 
                     self.time_step += 1
                 trainee.exploration_decay(episode)
+            # Switch Trainee and Trainer (cache trainer copy from previous trainee training)
+            trainer_q_table = deepcopy(trainer.q_table)
+            trainee, trainer = trainer, trainee
+            trainee_q_table, trainer_q_table = trainer_q_table, trainee_q_table
 
         # Display result
-        print('===== ' * 5)
+        print('\n', '===== ' * 5)
         print(f'Transactions\t\t: {self.num_cycles * self.num_episodes:6d}')
         print(f'Transactions Validated\t: {transactions_validated:6d}')
         print(f'Transactions Rejected\t: {transactions_rejected:6d}')
-        print('===== ' * 5)
-        print('      Seller Q-Table\t\t\t\t \t Buyer Q-Table ')
-        to_string = lambda row : ' '.join(map(lambda x:f'{x:>4}', row))
+        print('\n', '===== ' * 5)
+        print('      Seller Raw Q-Table\t\t\t\t\t \t Buyer Raw Q-Table ')
+        # Print action space
+        to_string = lambda row : ' '.join(map(lambda x:f'{x:>7}', row))
         print('   ', ' ', to_string(self.action_space), '\t|\t', to_string(self.action_space))
+
+        # Raw Q-Tables
         for i in range(len(self.seller.q_table)):
             state = self.state_space[i]
             seller_row = self.seller.q_table[i]
             buyer_row = self.buyer.q_table[i]
-            normalise = lambda row : [(v - min(row)) / (max(row) - min(row)) if max(row) > min(row) else v for v in row]
-            to_string = lambda row : ' '.join(map(lambda x:f'{str(x)[:4]:>4}', normalise(row)))
+
+            to_string = lambda row : ' '.join(map(lambda x:f'{x:.1e}' if x != 0 else '       ', row))
+
+            print(f'{state:>3}', '>', to_string(seller_row), '\t|\t', to_string(buyer_row))
+
+        # Softmax Q-Tables
+        if not display_softmax:
+            return
+        print('\n', '===== ' * 5)
+        print('      Seller Softmax Q-Table\t\t \t Buyer Softmax Q-Table ')
+        # Print action space
+        to_string = lambda row : ' '.join(map(lambda x:f'{x:>3}', row))
+        print('   ', ' ', to_string(self.action_space), '\t|\t', to_string(self.action_space))
+
+        softmax = lambda row : [exp(v) / sum([exp(w) for w in row]) for v in row]
+        to_string_hidden = lambda row : [f'{v:.2f}' for v in softmax(row)]
+        to_string = lambda row : ' '.join(map(lambda x:f'{x[1:]:>2}', to_string_hidden(row)))
+        for i in range(len(self.seller.q_table)):
+            state = self.state_space[i]
+            seller_row = self.seller.q_table[i]
+            buyer_row = self.buyer.q_table[i]
             print(f'{state:>3}', '>', to_string(seller_row), '\t|\t', to_string(buyer_row))
 
     def reset(self):
