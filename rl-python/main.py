@@ -2,4 +2,4 @@ from environment import Environment
 
 if __name__ == '__main__':
     environment = Environment()
-    environment.train(display_softmax=True)
+    environment.train(display_normalized=True)

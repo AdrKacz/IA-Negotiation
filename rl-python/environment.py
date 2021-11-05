@@ -47,7 +47,7 @@ class Environment(metaclass=Singleton):
         # Buyer and Seller
         self.buyer, self.seller = Buyer(), Seller()
 
-    def train(self, display_softmax=False):
+    def train(self, display_normalized=False):
         # Train Seller then Buyer alternatively
 
         # Initialise Q-Tables
@@ -137,7 +137,7 @@ class Environment(metaclass=Singleton):
             print(f'[{i:2d}] {state:>3}', '>', to_string(seller_row), '\t|\t', to_string(buyer_row))
 
         # Softmax Q-Tables
-        if not display_softmax:
+        if not display_normalized:
             return
         print('\n', '===== ' * 5)
         print(' ' * 10, 'Seller Softmax Q-Table\t\t \t Buyer Softmax Q-Table ')
@@ -145,8 +145,8 @@ class Environment(metaclass=Singleton):
         to_string = lambda row : ' '.join(map(lambda x:f'{x:>3}', row))
         print(' ' * 10, to_string(self.action_space), '\t|\t', to_string(self.action_space))
 
-        softmax = lambda row : [v / sum(row) if sum(row) > 0 else 0 for v in row]
-        to_string_hidden = lambda row : [f'{v:.2f}' if v > 0 else '   ' for v in softmax(row)]
+        normalized = lambda row : [v / sum(row) if sum(row) > 0 else 0 for v in row]
+        to_string_hidden = lambda row : [f'{v:.2f}' if v > 0 else '   ' for v in normalized(row)]
         to_string = lambda row : ' '.join(map(lambda x:f'{x[1:]:>3}', to_string_hidden(row)))
         for i in range(len(self.seller.q_table)):
             state = self.state_space[i]
