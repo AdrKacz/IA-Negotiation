@@ -27,19 +27,13 @@ class Environment(metaclass=Singleton):
 
         self.action_space_size = len(self.action_space)
 
-        # States (P * T + 2 * T + 1)
+        # States (P * T + 1)
         # price.time (for each price and for each time)
-        # validate.price.time (for each price and for each time)
-        # reject.price.time (for each price and for each time)
-        # Action 0 -> validate.price.time
-        # Action i -> validate.i.time if env (the other agent) accept the offer
         # Start state s
         offer_states = [f'{price + 1}.{time}' for time in range(self.time_space_size) for price in range(self.price_space_size)]
         self.state_space = ['s'] + offer_states + ['d']
 
         self.state_space_size = len(self.state_space)
-
-        self.reward_mapping = {}
 
         self.state = None
         self.time_step = 0
@@ -52,7 +46,6 @@ class Environment(metaclass=Singleton):
 
         # Initialise Q-Tables
         self.seller.initialise_q_table(self.action_space_size, self.state_space_size)
-
         self.buyer.initialise_q_table(self.action_space_size, self.state_space_size)
 
         transactions_rejected = 0
@@ -71,7 +64,6 @@ class Environment(metaclass=Singleton):
                 raise ValueError('Must do an offer at first')
 
         for cycle in range(self.num_cycles):
-            print('===== New Cycle', cycle)
             for episode in range(self.num_episodes):
                 self.reset()
                 is_trainer_first = episode % 2 == 0
@@ -116,11 +108,15 @@ class Environment(metaclass=Singleton):
             trainee, trainer = trainer, trainee
             trainee_q_table, trainer_q_table = trainer_q_table, trainee_q_table
 
+        assert transactions_validated + transactions_rejected ==  self.num_cycles * self.num_episodes
         # Display result
         print('\n', '===== ' * 5)
-        print(f'Transactions\t\t: {self.num_cycles * self.num_episodes:6d}')
+        print(f'Transactions Total\t: {self.num_cycles * self.num_episodes:6d}')
         print(f'Transactions Validated\t: {transactions_validated:6d}')
         print(f'Transactions Rejected\t: {transactions_rejected:6d}')
+        print('\t\tSeller\t Buyer\t Total')
+        print(f'Validated:\t{self.seller.transactions_validated:6d}\t{self.buyer.transactions_validated:6d}\t{self.seller.transactions_validated + self.buyer.transactions_validated:6d}')
+        print(f'Rejected:\t{self.seller.transactions_rejected:6d}\t{self.buyer.transactions_rejected:6d}\t{self.seller.transactions_rejected + self.buyer.transactions_rejected:6d}')
         print('\n', '===== ' * 5)
         print(' ' * 10, 'Seller Raw Q-Table\t\t\t\t \t Buyer Raw Q-Table ')
         # Print action space
