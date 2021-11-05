@@ -18,14 +18,20 @@ class Agent:
         self.exploration_rate = Agent.max_exploration_rate
 
         # Keep statistic of training phase
+        self.wallet = 0
         self.transactions_validated = 0
         self.transactions_rejected = 0
+
+        self.transactions_validated_list = list()
+        self.transactions_rejected_list = list()
 
 
     def initialise_q_table(self, action_space_size, state_space_size):
         self.exploration_rate = Agent.max_exploration_rate
         self.transactions_validated = 0
         self.transactions_rejected = 0
+        self.transactions_validated_list = list()
+        self.transactions_rejected_list = list()
 
         self.action_space_size = action_space_size
         self.state_space_size = state_space_size
@@ -33,6 +39,7 @@ class Agent:
         self.q_table = [[0 for j in range(action_space_size)] for i in range(state_space_size)]
 
         self.reset()
+        self.reset_wallet()
 
     def reset(self):
         self.state = None
@@ -81,6 +88,18 @@ class Agent:
         elif self.last_action_index == 6:
             self.transactions_rejected += 1
 
+    def save_statistics_delta(self):
+        if len(self.transactions_validated_list) == 0:
+            self.transactions_validated_list.append(self.transactions_validated)
+        else:
+            self.transactions_validated_list.append(self.transactions_validated - sum(self.transactions_validated_list))
+
+        if len(self.transactions_rejected_list) == 0:
+            self.transactions_rejected_list.append(self.transactions_rejected)
+        else:
+            self.transactions_rejected_list.append(self.transactions_rejected - sum(self.transactions_rejected_list))
+
+
     def exploit(self, overwrite_q_table=None):
         q_table = self.q_table
         if overwrite_q_table:
@@ -108,20 +127,34 @@ class Agent:
 
 
 class Buyer(Agent):
+    def reset_wallet(self):
+        self.wallet = 0
+
+    def update_wallet(self, offer):
+        self.wallet -= offer
+
     def get_reward(self, step_return_without_reward):
         info = step_return_without_reward['info']
-        if info == 'validated':
-            return 1
+        if info.get('type')  == 'validated':
+            assert 1 <= info.get('offer', 0) <= 5
+            return 1 - info['offer'] / 5
         return 0
 
     def __str__(self):
         return 'Buyer '
 
 class Seller(Agent):
+    def reset_wallet(self):
+        self.wallet = 0
+
+    def update_wallet(self, offer):
+        self.wallet += offer
+
     def get_reward(self, step_return_without_reward):
         info = step_return_without_reward['info']
-        if info == 'rejected':
-            return 1
+        if info.get('type') == 'validated':
+            assert 1 <= info.get('offer', 0) <= 5
+            return info['offer'] / 5
         return 0
 
     def __str__(self):

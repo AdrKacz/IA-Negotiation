@@ -1,19 +1,12 @@
 from agent import Buyer, Seller
 from copy import deepcopy
 from math import exp
+import matplotlib.pyplot as plt
 
-class Singleton(type):
-    # Use cls._instances[cls] to get instance if any
-    _instances = {}
-    def __call__(cls, *args, **kwargs):
-        if cls not in cls._instances:
-            cls._instances[cls] = super(Singleton, cls).__call__(*args, **kwargs)
-        return cls._instances[cls]
-
-class Environment(metaclass=Singleton):
+class Environment():
     def __init__(self):
         # Training Information
-        self.num_cycles = int(1e1)
+        self.num_cycles = int(5e1)
         self.num_episodes = int(1e3)
 
 
@@ -35,22 +28,25 @@ class Environment(metaclass=Singleton):
 
         self.state_space_size = len(self.state_space)
 
-        self.state = None
+        self.last_offer = None
         self.time_step = 0
 
         # Buyer and Seller
         self.buyer, self.seller = Buyer(), Seller()
 
-    def train(self, display_normalized=False):
+    def train(self, display_normalized=False, display_plot=True):
         # Train Seller then Buyer alternatively
 
         # Initialise Q-Tables
         self.seller.initialise_q_table(self.action_space_size, self.state_space_size)
         self.buyer.initialise_q_table(self.action_space_size, self.state_space_size)
 
+        # Statistics
         transactions_rejected = 0
         transactions_validated = 0
+        seller_wallets, buyer_wallets = list(), list()
         # Q-Learning Algorithm
+        trainee_wallets, trainer_wallets = seller_wallets, buyer_wallets
         trainee, trainer = self.seller, self.buyer
         trainee_q_table, trainer_q_table = deepcopy(trainee.q_table), deepcopy(trainer.q_table)
 
@@ -64,6 +60,7 @@ class Environment(metaclass=Singleton):
                 raise ValueError('Must do an offer at first')
 
         for cycle in range(self.num_cycles):
+            trainee.reset_wallet(), trainer.reset_wallet()
             for episode in range(self.num_episodes):
                 self.reset()
                 is_trainer_first = episode % 2 == 0
@@ -74,9 +71,10 @@ class Environment(metaclass=Singleton):
                     step_return = self.step(self.action_space[action_index], trainee)
 
                     if step_return['done']:
-                        if step_return['info'] == 'validated':
+                        if step_return['info']['type'] == 'validated':
                             transactions_validated += 1
-                        elif step_return['info'] == 'rejected':
+                            trainee.update_wallet(step_return['info']['offer']), trainer.update_wallet(step_return['info']['offer'])
+                        elif step_return['info']['type'] == 'rejected':
                             transactions_rejected += 1
                         trainee.update_state(step_return)
                         break
@@ -90,9 +88,10 @@ class Environment(metaclass=Singleton):
                     trainee.update_state(step_return)
 
                     if step_return['done']:
-                        if step_return['info'] == 'validated':
+                        if step_return['info']['type'] == 'validated':
                             transactions_validated += 1
-                        elif step_return['info'] == 'rejected':
+                            trainee.update_wallet(step_return['info']['offer']), trainer.update_wallet(step_return['info']['offer'])
+                        elif step_return['info']['type'] == 'rejected':
                             transactions_rejected += 1
                         break
 
@@ -103,13 +102,32 @@ class Environment(metaclass=Singleton):
                     raise ValueError('No one close the transaction before end')
 
                 trainee.exploration_decay(episode)
+            # Update Statistics
+            trainee_wallets.append(trainee.wallet), trainer_wallets.append(trainer.wallet)
+            trainee.save_statistics_delta(), trainer.save_statistics_delta()
             # Switch Trainee and Trainer (cache trainer copy from previous trainee training)
             trainer_q_table = deepcopy(trainer.q_table)
             trainee, trainer = trainer, trainee
+            trainee_wallets, trainer_wallets = trainer_wallets, trainee_wallets
             trainee_q_table, trainer_q_table = trainer_q_table, trainee_q_table
 
         assert transactions_validated + transactions_rejected ==  self.num_cycles * self.num_episodes
+
         # Display result
+        self.display_statistics(transactions_validated, transactions_rejected)
+
+        # Raw Q-Tables
+        self.display_q_tables()
+
+        # Prob. Q-Tables
+        if display_normalized:
+            self.display_prob_q_tables()
+
+        # Plot Result
+        if display_plot:
+            self.display_plot(seller_wallets, buyer_wallets)
+
+    def display_statistics(self, transactions_validated, transactions_rejected):
         print('\n', '===== ' * 5)
         print(f'Transactions Total\t: {self.num_cycles * self.num_episodes:6d}')
         print(f'Transactions Validated\t: {transactions_validated:6d}')
@@ -117,13 +135,13 @@ class Environment(metaclass=Singleton):
         print('\t\tSeller\t Buyer\t Total')
         print(f'Validated:\t{self.seller.transactions_validated:6d}\t{self.buyer.transactions_validated:6d}\t{self.seller.transactions_validated + self.buyer.transactions_validated:6d}')
         print(f'Rejected:\t{self.seller.transactions_rejected:6d}\t{self.buyer.transactions_rejected:6d}\t{self.seller.transactions_rejected + self.buyer.transactions_rejected:6d}')
+
+    def display_q_tables(self):
         print('\n', '===== ' * 5)
         print(' ' * 10, 'Seller Raw Q-Table\t\t\t\t \t Buyer Raw Q-Table ')
         # Print action space
         to_string = lambda row : ' '.join(map(lambda x:f'{x:>5}', row))
         print(' ' * 10, to_string(self.action_space), '\t|\t', to_string(self.action_space))
-
-        # Raw Q-Tables
         for i in range(len(self.seller.q_table)):
             state = self.state_space[i]
             seller_row = self.seller.q_table[i]
@@ -132,11 +150,9 @@ class Environment(metaclass=Singleton):
 
             print(f'[{i:2d}] {state:>3}', '>', to_string(seller_row), '\t|\t', to_string(buyer_row))
 
-        # Softmax Q-Tables
-        if not display_normalized:
-            return
+    def display_prob_q_tables(self):
         print('\n', '===== ' * 5)
-        print(' ' * 10, 'Seller Softmax Q-Table\t\t \t Buyer Softmax Q-Table ')
+        print(' ' * 10, 'Seller Prob. Q-Table\t\t \t Buyer Prob. Q-Table ')
         # Print action space
         to_string = lambda row : ' '.join(map(lambda x:f'{x:>3}', row))
         print(' ' * 10, to_string(self.action_space), '\t|\t', to_string(self.action_space))
@@ -149,6 +165,29 @@ class Environment(metaclass=Singleton):
             seller_row = self.seller.q_table[i]
             buyer_row = self.buyer.q_table[i]
             print(f'[{i:2d}] {state:>3}', '>', to_string(seller_row), '\t|\t', to_string(buyer_row))
+
+    def display_plot(self, seller_wallets, buyer_wallets):
+        cycles = list(range(self.num_cycles))
+        plt.figure()
+        plt.subplot(311)
+        plt.title('Seller')
+        plt.plot(cycles, self.seller.transactions_validated_list, 'o-', label='Validated', color='g')
+        plt.plot(cycles, self.seller.transactions_rejected_list, 'o-', label='Rejected', color='r')
+        plt.legend()
+
+        plt.subplot(312)
+        plt.title('Buyer')
+        plt.plot(cycles, self.buyer.transactions_validated_list, 'o-', label='Validated', color='g')
+        plt.plot(cycles, self.buyer.transactions_rejected_list, 'o-', label='Rejected', color='r')
+        plt.legend()
+
+        plt.subplot(313)
+        plt.title('Wallet')
+        plt.plot(cycles, seller_wallets, 'o-', label='Seller', color='b')
+        plt.plot(cycles, buyer_wallets, 'o-', label='Buyer', color='m')
+        plt.legend()
+
+        plt.show()
 
     def reset(self):
         self.time_step = 0
@@ -165,18 +204,19 @@ class Environment(metaclass=Singleton):
         # TODO: Dissociate Reward for Seller and Buyer
         # NOTE: Reward based on previous state to maximise profit
 
-        new_state_string, done, info = None, False, ''
+        new_state_string, done, info = None, False, {}
 
         new_state_string = f'{self.time_step}'
         if action == -1:
             new_state_string = 'd'
             done = True
-            info = 'rejected'
+            info = {'type': 'rejected'}
         elif action == 0:
             new_state_string = 'd'
             done = True
-            info = 'validated'
+            info = {'type': 'validated', 'offer': self.last_offer}
         else:
+            self.last_offer = action
             new_state_string = f'{action}.{new_state_string}'
 
         step_return_without_reward = {
