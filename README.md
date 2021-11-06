@@ -1,6 +1,6 @@
 # Reinforcement Learning Negotiations
 
-@AdrKacz, @maxbeaufre, Master Artificial Intelligence Ecole Centrale Lyon - Lyon 1
+*[@AdrKacz](https://github.com/AdrKacz), [@mbeaufre](https://github.com/mbeaufre), Master Artificial Intelligence Ecole Centrale Lyon - Lyon 1*
 
 ## Run the project
 
