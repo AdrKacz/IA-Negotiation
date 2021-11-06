@@ -7,7 +7,7 @@ class Environment():
     def __init__(self):
         # Training Information
         self.num_cycles = int(5e1)
-        self.num_episodes = int(1e3)
+        self.num_episodes = int(1e2)
 
 
         # Complexity : price_space_size = P , time_space_size = T
@@ -34,21 +34,29 @@ class Environment():
         # Buyer and Seller
         self.buyer, self.seller = Buyer(), Seller()
 
-    def train(self, display_normalized=False, display_plot=True):
+    def train(self, verbose=False, display_normalized=False, display_plot=False, train_both=True, train_agent=None):
         # Train Seller then Buyer alternatively
+        if not train_both and not train_agent:
+            raise ValueError('Specified a agent to train if you don\'t train both')
+        elif not train_both and train_agent not in ['Seller', 'Buyer']:
+            raise ValueError('Train Agent must be either Seller or Buyer')
 
         # Initialise Q-Tables
         self.seller.initialise_q_table(self.action_space_size, self.state_space_size)
         self.buyer.initialise_q_table(self.action_space_size, self.state_space_size)
 
         # Statistics
-        transactions_rejected = 0
-        transactions_validated = 0
+        transactions_validated, transactions_rejected = 0, 0
         seller_wallets, buyer_wallets = list(), list()
         # Q-Learning Algorithm
-        trainee_wallets, trainer_wallets = seller_wallets, buyer_wallets
         trainee, trainer = self.seller, self.buyer
+        trainee_wallets, trainer_wallets = seller_wallets, buyer_wallets
         trainee_q_table, trainer_q_table = deepcopy(trainee.q_table), deepcopy(trainer.q_table)
+
+        if train_agent == 'Buyer':
+            trainee, trainer = trainer, trainee
+            trainee_wallets, trainer_wallets = trainer_wallets, trainee_wallets
+            trainee_q_table, trainer_q_table = trainer_q_table, trainee_q_table
 
         def trainer_first():
             # Trainer Start Negociation
@@ -106,12 +114,16 @@ class Environment():
             trainee_wallets.append(trainee.wallet), trainer_wallets.append(trainer.wallet)
             trainee.save_statistics_delta(), trainer.save_statistics_delta()
             # Switch Trainee and Trainer (cache trainer copy from previous trainee training)
-            trainer_q_table = deepcopy(trainer.q_table)
-            trainee, trainer = trainer, trainee
-            trainee_wallets, trainer_wallets = trainer_wallets, trainee_wallets
-            trainee_q_table, trainer_q_table = trainer_q_table, trainee_q_table
+            if train_both:
+                trainer_q_table = deepcopy(trainer.q_table)
+                trainee, trainer = trainer, trainee
+                trainee_wallets, trainer_wallets = trainer_wallets, trainee_wallets
+                trainee_q_table, trainer_q_table = trainer_q_table, trainee_q_table
 
         assert transactions_validated + transactions_rejected ==  self.num_cycles * self.num_episodes
+
+        if not verbose:
+            return
 
         # Display result
         self.display_statistics(transactions_validated, transactions_rejected)
@@ -127,9 +139,58 @@ class Environment():
         if display_plot:
             self.display_plot(seller_wallets, buyer_wallets)
 
+    def test(self):
+        # Statistics
+        transactions_validated, transactions_rejected = 0, 0
+
+        # Test Seller versus Buyer
+        first, second = self.seller, self.buyer
+        for episode in range(self.num_episodes):
+            self.reset()
+            for step in range(self.time_space_size):
+                action_index = first.exploit()
+                step_return = self.step(self.action_space[action_index])
+
+                if step_return['done']:
+                    if step_return['info']['type'] == 'validated':
+                        transactions_validated += 1
+                        first.update_wallet(step_return['info']['offer']), second.update_wallet(step_return['info']['offer'])
+                    elif step_return['info']['type'] == 'rejected':
+                        transactions_rejected += 1
+                    break
+
+                second.state = step_return['new_state']
+                action_index = second.exploit()
+                step_return = self.step(self.action_space[action_index])
+
+                if step_return['done']:
+                    if step_return['info']['type'] == 'validated':
+                        transactions_validated += 1
+                        first.update_wallet(step_return['info']['offer']), second.update_wallet(step_return['info']['offer'])
+                    elif step_return['info']['type'] == 'rejected':
+                        transactions_rejected += 1
+                    break
+
+                self.time_step += 1
+
+            if self.time_step >= self.time_space_size:
+                raise ValueError('No one close the transaction before end')
+
+            # Switch first and second
+            first, second = second, first
+
+        # Update Statistics
+        assert transactions_validated + transactions_rejected ==  self.num_episodes
+
+        # Display result
+        self.display_statistics(transactions_validated, transactions_rejected)
+
+        print(f'Seller Wallet: {self.seller.wallet:4>}')
+        print(f'Buyer Wallet: {self.buyer.wallet:4>}')
+
     def display_statistics(self, transactions_validated, transactions_rejected):
         print('\n', '===== ' * 5)
-        print(f'Transactions Total\t: {self.num_cycles * self.num_episodes:6d}')
+        print(f'Transactions Total\t: {self.num_episodes:6d}')
         print(f'Transactions Validated\t: {transactions_validated:6d}')
         print(f'Transactions Rejected\t: {transactions_rejected:6d}')
         print('\t\tSeller\t Buyer\t Total')
