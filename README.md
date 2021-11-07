@@ -4,6 +4,8 @@
 
 ## Run the project
 
+>Programs were tested on MacOS, and will work on Linux. If you do run on Windows ... well, at least please use a terminal that can display colour, or `.\legacy\main.py` won't run otherwise.
+
 ```
 git clone https://github.com/AdrKacz/IA-Negotiation.git
 cd IA-Negotiation
@@ -185,11 +187,27 @@ To obtain something interesting, we decided to not fixed the strategies but inst
 
 We will use a Reinforcement Learning Algorithm to optimise the strategy of the **Buyer** and of the **Seller**.
 
+All the following work is in the `.\rl-python` folder.
+
 ## Limit the scope
 
 We will implement the **[Q-Learning Algorithm](https://en.wikipedia.org/wiki/Q-learning)**. This algorithm is based on a representation of the *Environment* of the *Agent* as couples of *states* and *actions*.
 
 For each *state*, there is an associated *reward* used to update the **Q-Table** of the *Agent* thanks to the **Bellman's Equation**.
+
+```py
+class Agent:
+  def update_state(self, step_return):
+      if self.last_action_index ==  None:
+          raise ValueError('Cannot update Q-Table if no action has been made')
+
+
+      new_state = step_return['new_state']
+      # Update Q-table Q(state, action) -- Bellman's Equation
+      self.q_table[self.state][self.last_action_index] = self.q_table[self.state][self.last_action_index] * (1 - self.learning_rate) + self.learning_rate * (step_return['reward'] + self.discount_rate * max(self.q_table[new_state]))
+
+      self.state = new_state
+```
 
 The *Q-Table* holds the different *states* in its rows and the different *actions* in its columns. The index highest value in a row (corresponding to a *state*) is the index of the *action* to perform.
 
@@ -211,6 +229,27 @@ There is a *initial state*. This is *state* is the *state* an *agent* is in when
 
 That made up a total of `price_space_size x time_space_size + 1` *states*, so **5 x 5 + 1 = 26** *states*.
 
+```py
+class Environement():
+  def __init__(self):
+    # ...
+
+    # Complexity : price_space_size = P , time_space_size = T
+    self.price_space_size = 5
+    self.time_space_size = 5
+
+    # ...
+
+    # States (P * T + 2)
+    # price.time (for each price and for each time)
+    # Start state s
+    offer_states = [f'{price + 1}.{time}' for time in range(self.time_space_size) for price in range(self.price_space_size)]
+    self.state_space = ['s'] + offer_states + ['d']
+
+    # ...
+  # ...
+```
+
 In **Q-Learning Algorithm**, *agents* explore multiple times all couples of *states* and *actions* to learn the best combinaison. So, the higher the number of *states* is, the more complicated it is to find a stable **Q-Table**.
 
 
@@ -220,9 +259,44 @@ Each *agent* can either make a new offer, within the `price_space_size`, accept 
 
 That makes up a total of **7** different actions.
 
+```py
+class Environement():
+  def __init__(self):
+    # ...
+
+    # Complexity : price_space_size = P , time_space_size = T
+    self.price_space_size = 5
+    self.time_space_size = 5
+
+    # Actions (P + 2)
+    # 1 <= i <= n : offer ; 0 : accept : -1 : reject
+    self.action_space = [i + 1 for i in range(self.price_space_size)] + [0, -1]
+
+    self.action_space_size = len(self.action_space)
+
+    # ...
+  # ...
+```
+
 If the *agent* is in the *initial state*, it cannot accept or quit the transaction.
 
 If the *agent* is in the last round of the transaction, it has to either accept the last offer or quit the transaction, it cannot make another offer.
+
+```py
+class Agent:
+  #...
+  def dynamic_action_space(self):
+        # Must do an offer at first
+        # Must accept or reject if last round
+        from_action, to_action = 0, self.action_space_size
+        if self.state == 0: # Start
+            to_action -= 2 # Remove Validate and Reject
+        elif self.state_space_size + 1 - self.action_space_size <= self.state < self.state_space_size - 1: # Last round
+            from_action += self.action_space_size - 2 # Remove offer action
+
+        return from_action, to_action
+  # ...
+```
 
 ### Rewards
 
@@ -232,22 +306,144 @@ If the *agent* is in the last round of the transaction, it has to either accept 
 
  **Seller** *reward* has the value of the price of the offer divided by `price_space_size`. So the higher the offer is, the higher the *reward* is.
 
+ ```py
+ class Seller(Agent):
+   # ...
+   def get_reward(self, step_return_without_reward):
+       info = step_return_without_reward['info']
+       if info.get('type') == 'validated':
+           assert 1 <= info.get('offer', 0) <= 5
+           return info['offer'] / 5
+       return 0
+  # ...
+```
+
 **Buyer** *reward* has the value of one minus the price of the offer divided by `price_space_size`. So the lower the offer is, the higher the *reward* is.
 
-## Analysis of the code
+```py
+class Buyer(Agent):
+  # ...
+  def get_reward(self, step_return_without_reward):
+        info = step_return_without_reward['info']
+        if info.get('type')  == 'validated':
+            assert 1 <= info.get('offer', 0) <= 5
+            return 1 - info['offer'] / 5
+        return 0
+ # ...
+```
+
+## Concurrent Q-Learning
+
+One of the major problem to overcome is that there is no static environment.
+
+Indeed, in a classic setup, there is one *agent*, that acts in a *environment*, and the *environment* stays the same and reacts to *agent's* actions.
+
+However, here, the environment, of *one agent* is the *other agent*. However, we don't know the optimal comportement of the *other agent* until it's trained.
+
+So, we have to trained both *agents* at the same time during the training phase.
+
+However, while learning, **Q-Learning Algorithm** requires a certain amount of stability to evolve.
+
+So, we decided to fix the *other agent* during a certain amount of negotiations trainings, and then switch. We have the *trainee* that is the *agent* that trained its **Q-Table** and the *trainer* that has a fixed **Q-Table** and behaves as a more classical *environment* will.
+
+There is two parameters that control the length of the training:
+- `num_cycles` that is the number of switch performs between *trainee* and *trainer*
+- `num_episodes` that is the number of negotiation for each *cycle*.
+
+```py
+class Environment():
+  def __init__(self):
+    # Training Information
+    self.num_cycles = int(5e1)
+    self.num_episodes = int(1e2)
+
+    # ...
+    # Buyer and Seller
+    self.buyer, self.seller = Buyer(), Seller()
+  # ...
+```
+
+There is still two problems to solve:
+
+1. After a *cycle*, *trainee agent* will outperforms *trainer agent*, thus in the *next cycle*, the *new trainee agent* (old *trainer agent*) will struggle to evolve in a too difficult environment. To overcome this, we store the **Q-Table** of the *trainee agent* before the *cycle* begins and use this **Q-Table** in the next *cycle* while *trainee* becomes *trainer*
+
+2. The *agent* that starts will trained value for the *initial state* but never for the *states* of the last round. The same, the *agent* that doesn't start will never trained value for the *initial state* but will for the *states* of the last round. So, to trained all value in the **Q-Tables**, we alternate for each *episode* (or *transaction*) the *agent* that starts.
+
+```py
+class Environment():
+  # ...
+  def train(...):
+    # ...
+    # Initialise Q-Tables
+    # Define trainee and trainer
+    #   trainee being either self.seller or self.buyer
+    #   trainer begin the other one
+    # ...
+    for cycle in range(self.num_cycles):
+      # ...
+      for episode in range(self.num_episodes):
+        # Reset
+        # ...
+        # Determine do the first offer
+        is_trainer_first = episode % 2 == 0
+        if is_trainer_first:
+            trainer_first()
+        for step in range(self.time_space_size):
+            # Get Trainee action
+          action_index = trainee.act()
+          step_return = self.step(self.action_space[action_index], trainee)
+
+          # ...
+          # Check if the action terminate the transaction
+          # ...
+
+          # Get Trainer action
+          action_index = trainer.exploit(overwrite_q_table=trainer_q_table)
+          step_return = self.step(self.action_space[action_index], trainee)
+
+          # Update Trainee states and Q-Tables
+          trainee.update_state(step_return)
+
+          # ...
+          # Check if the action terminate the transaction    
+          # ...
+        # Q-Learning Algorithm Exploration Decay
+        trainee.exploration_decay(episode)
+        # ...
+      # ...
+      # Switch Trainee and Trainer
+      trainer_q_table = deepcopy(trainer.q_table)
+      trainee, trainer = trainer, trainee
+      trainee_q_table, trainer_q_table = trainer_q_table, trainee_q_table
+  # ...
+```
+
+### Training Parameters
+
+The `train` function of the *environment* has multiple optional parameters.
+
+- *verbose (`bool`):* whether or not to display global statistics in the terminal and the final **Q-Tables** of `self.seller` and `self.buyer`. Blank values in the **Q-Tables** are `null` or *untrained* values.
+
+- *display_normalized (`bool`):* whether or not to display the normalized **Q-Tables** of `self.seller` and `self.buyer`. The normalized **Q-Tables** can be read more easily.
+
+- *display_plot (`bool`):* whether or not to display as a the graphs the statistics of the training.
+
+- *train_both (`bool`):*  whether or not to train both the **Seller** and the **Buyer**. Useful to compare during *testing* if a *trained agent* overcome an *untrained agent*.
+
+- *train_agent (`str`):* either `'Seller'` or `'Buyer'`. If `train_both` is enable, defined the `agent` that will be trained first (first *cycle* training). If `train_both` is disable, defined the `agent` to train.
 
 ## Further Research
 
 - Enlarge `price_space_size` and `time_space_size`, and see if new significant result appears.
 
- > Potential Result:  More complex strategy or impossibility to converge toward a stable **Q-Table**.
+ > *Potential Result:*  More complex strategy or impossibility to converge toward a stable **Q-Table**.
 
 - Train a bunch of agents (both **Seller** and **Buyer**), with different learning parameters, and put them in a global room to negotiate together.
 
  - Give a common wallet to multiple agents.
 
- > Potential Result:  Simulate a mini market place with multi-actors and multi-wallets.
+ > *Potential Result:*  Simulate a mini market place with multi-actors and multi-wallets.
 
 - Instead of limit the number of transactions limit the number of time steps.
 
- > Potential Result:  Infer new behaviour, where closing a transaction earlier is a real improvement in the strategy.
+ > *Potential Result:*  Infer new behaviour, where closing a transaction earlier is a real improvement in the strategy.

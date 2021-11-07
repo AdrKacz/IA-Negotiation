@@ -51,7 +51,7 @@ class Agent:
 
 
         new_state = step_return['new_state']
-        # Update Q-table Q(state, action)
+        # Update Q-table Q(state, action) -- Bellman's Equation
         self.q_table[self.state][self.last_action_index] = self.q_table[self.state][self.last_action_index] * (1 - self.learning_rate) + self.learning_rate * (step_return['reward'] + self.discount_rate * max(self.q_table[new_state]))
 
         self.state = new_state

@@ -20,7 +20,7 @@ class Environment():
 
         self.action_space_size = len(self.action_space)
 
-        # States (P * T + 1)
+        # States (P * T + 2)
         # price.time (for each price and for each time)
         # Start state s
         offer_states = [f'{price + 1}.{time}' for time in range(self.time_space_size) for price in range(self.price_space_size)]
