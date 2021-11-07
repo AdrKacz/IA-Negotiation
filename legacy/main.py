@@ -44,9 +44,9 @@ def main(stdscr):
         stdscr.addstr(0, 0, f'Iteration {i}\t')
         stdscr.refresh()
 
-        seller.act()
-        env.update()
         buyer.act()
+        env.update()
+        seller.act()
         env.update()
         env.display()
 

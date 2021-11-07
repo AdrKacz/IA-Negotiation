@@ -55,7 +55,6 @@ class Environment:
         # Seller price
         if self.seller.price != None:
             x = local_transform(self.seller.price)
-            print(x, curses.COLS)
             stdscr.addstr(y_shift + y_seller, x, ' ', curses.color_pair(4))
 
         # Deal

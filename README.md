@@ -125,6 +125,9 @@ def display(self, y_shift=1):
 
     stdscr.refresh()
 ```
+`display` function is called at every iteration of the negotiation and displayed as below.
+
+![Legacy Deal](./legacy/exports/legacy-deal.gif)
 
 ## Strategies
 
@@ -181,3 +184,15 @@ To obtain something interesting, we decided to not fixed the strategies but inst
 # Dynamic method
 
 We will use a Reinforcement Learning Algorithm to optimise the strategy of the **Buyer** and of the **Seller**.
+
+## Limit the scope
+
+We will implement the **[Q-Learning Algorithm](https://en.wikipedia.org/wiki/Q-learning)**. This algorithm is based on a representation of the *Environment* of the *Agent* as couples of *states* and *actions*.
+
+For each *state*, there is an associated *reward* used to update the **Q-Table** of the *Agent* thanks to the **Bellman's Equation**.
+
+The *Q-Table* holds the different *states* in its rows and the different *actions* in its columns. The index highest value in a row (corresponding to a *state*) is the index of the *action* to perform.
+
+The objective is to determine, for each state, what is the best action to choose, to obtain the highest reward at the end.
+
+So, we have to determine the **states**, the **actions**, and the **rewards** associate with each *state*.
