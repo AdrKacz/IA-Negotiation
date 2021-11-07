@@ -196,3 +196,58 @@ The *Q-Table* holds the different *states* in its rows and the different *action
 The objective is to determine, for each state, what is the best action to choose, to obtain the highest reward at the end.
 
 So, we have to determine the **states**, the **actions**, and the **rewards** associate with each *state*.
+
+### State Space
+
+**Q-Learning Algorithm** enforces to have a finite number of *states*.
+
+We choose to limit the number of different *price offer* (`price_space_size`) to **5** and the maximum number of exchanges between the *Buyer* and the *Seller* (`time_space_size`) to **5**.
+
+So, a negotiation is made up of **5** rounds. During *1* round, the **Seller** acts, then the **Buyer** acts, or vice versa.
+
+There is an additional *final state*. This *state* is needed because the **Q-Learning Algorithm** only learn from current state to previous one. So, to learn if a transaction was successful, you need a state to end up after the transaction.
+
+There is a *initial state*. This is *state* is the *state* an *agent* is in when it hasn't received any offer yet and has to make one.
+
+That made up a total of `price_space_size x time_space_size + 1` *states*, so **5 x 5 + 1 = 26** *states*.
+
+In **Q-Learning Algorithm**, *agents* explore multiple times all couples of *states* and *actions* to learn the best combinaison. So, the higher the number of *states* is, the more complicated it is to find a stable **Q-Table**.
+
+
+### Action Space
+
+Each *agent* can either make a new offer, within the `price_space_size`, accept the previous offer if any, and quit the transaction.
+
+That makes up a total of **7** different actions.
+
+If the *agent* is in the *initial state*, it cannot accept or quit the transaction.
+
+If the *agent* is in the last round of the transaction, it has to either accept the last offer or quit the transaction, it cannot make another offer.
+
+### Rewards
+
+**Seller** and **Buyer** have a different reward system.
+
+*Agent* gains a *reward* when it accepts an offer or if its offer is accepted by the *other agent*.
+
+ **Seller** *reward* has the value of the price of the offer divided by `price_space_size`. So the higher the offer is, the higher the *reward* is.
+
+**Buyer** *reward* has the value of one minus the price of the offer divided by `price_space_size`. So the lower the offer is, the higher the *reward* is.
+
+## Analysis of the code
+
+## Further Research
+
+- Enlarge `price_space_size` and `time_space_size`, and see if new significant result appears.
+
+ > Potential Result:  More complex strategy or impossibility to converge toward a stable **Q-Table**.
+
+- Train a bunch of agents (both **Seller** and **Buyer**), with different learning parameters, and put them in a global room to negotiate together.
+
+ - Give a common wallet to multiple agents.
+
+ > Potential Result:  Simulate a mini market place with multi-actors and multi-wallets.
+
+- Instead of limit the number of transactions limit the number of time steps.
+
+ > Potential Result:  Infer new behaviour, where closing a transaction earlier is a real improvement in the strategy.
