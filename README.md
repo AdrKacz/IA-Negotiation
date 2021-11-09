@@ -6,7 +6,7 @@
 
 ## Run the project
 
->Programs were tested on macOS and will work on Linux. If you do run on Windows ... well, at least please use a terminal that can display colour, or `./legacy/main.py` won't run otherwise.
+>Programs were tested on macOS and will work on Linux. If you run on Windows,  please use a terminal that can display colour, otherwise `./legacy/main.py` won't run.
 
 ```
 git clone https://github.com/AdrKacz/IA-Negotiation.git
@@ -32,7 +32,7 @@ We focus on optimising the strategy of the **Seller**, and the **Buyer**.
 
 # Static method
 
-An obvious way of tackling the problem will be to define different strategies for **Sellers** and **Agents** and to measure their performance in an **Environment**.
+An obvious way of tackling the problem will be to define different strategies for **Sellers** and **Agents** and measure their performance in an **Environment**.
 
 We implement such a way in the `./legacy` folder, but as you will see, we quickly gave up this approach.
 
@@ -45,11 +45,11 @@ We will use three objects:
 
 We use the `curses` library to print information in the terminal and refresh it.
 
-We first wrap our `main` function in the `curses.wrapper` to safely get access our terminal screen
+We first wrap our `main` function in the `curses.wrapper` to safely get access our terminal screen.
 
 We then initialise the screen and the colour used in `./legacy/main.py`.
 
-At every iteration, the seller acts, then the buyer acts, then the terminal is refreshed. There is a total of `10` iteration because, with the strategies defined, there is no need for more to find an agreement.
+At every iteration, the **Seller** acts, then the **Buyer** acts, then the terminal is refreshed. There is a total of `10` iteration because, with the strategies defined, there is no need for more to find an agreement.
 
 ```py
 for i in range(10):
@@ -92,7 +92,7 @@ curses.init_pair(5, 5, 6)
 curses.init_pair(6, 6, -1)
 ```
 
-**Environment** defines a `display` function that is in charge of printing the current state of the negotiation.
+**Environment** defines a `display` function in charge of printing the current state of the negotiation.
 
 ```py
 def display(self, y_shift=1):
@@ -183,9 +183,9 @@ As expected, both the **Buyer** and the **Seller** act the way they are defined 
 
 We don't have previous knowledge in negotiation strategies and thus cannot come up with interesting strategies to compare.
 
-Moreover, the problem doesn't change if we add multiple **Buyers** and multiple **Sellers**. Indeed, after having found the one they want to negotiate with, we are reduced to the original problem. The negotiation can be closed earlier by one of the *Agents* to simulate the fact that they can switch between different *Agents* to negotiate a better price.
+Moreover, the problem doesn't change if we add multiple **Buyers** and multiple **Sellers**. Indeed, after finding the one they want to negotiate with, we are reduced to the original problem. One of the *Agents* can close the negotiation earlier to simulate a switch between a different *Agent* to negotiate a better price.
 
-To obtain something interesting, we decided to not fix the strategies and instead to compute an optimal strategy.
+To obtain something interesting, we decided not to fix the strategies and instead compute an optimal strategy.
 
 # Dynamic method
 
@@ -217,7 +217,7 @@ The *Q-Table* holds the different *states* in its rows and the different *action
 
 The objective is to determine, for each state, what is the best action to choose, to obtain the highest reward at the end.
 
-So, we have to determine the **states**, the **actions**, and the **rewards** associate with each *state*.
+We have to determine the **states**, the **actions**, and the **rewards** associate with each *state*.
 
 ### State Space
 
@@ -229,7 +229,7 @@ So, negotiation is made up of **5** rounds. During *1* round, the **Seller** act
 
 There is an additional *final state*. This *state* is needed because the **Q-Learning Algorithm** only learn from the current state to the previous one. So, to learn if a transaction was successful, you need a state to end up after the transaction.
 
-There is an *initial state*. This is *state* is the *state* an *agent* is in when it hasn't received any offer yet and has to make one.
+There is an *initial state*, the *agent* is in this *state* when it hasn't received any offer yet and has to make one.
 
 That made up a total of `price_space_size x time_space_size + 1` *states*, so **5 x 5 + 1 = 26** *states*.
 
@@ -340,7 +340,7 @@ class Buyer(Agent):
 
 One of the major problems to overcome is that there is no static environment.
 
-Indeed, in a classic setup, there is one *agent*, that acts in an *environment*, and the *environment* stays the same and reacts to *agent's* actions.
+Indeed, in a classic setup, there is one *agent*, that acts in an *environment*, the *environment* stays the same and reacts to *agent's* actions.
 
 However, here, the environment, of *one agent* is *another agent*. However, we don't know the optimal behaviour of *another agent* until it's trained.
 
@@ -470,7 +470,7 @@ As expected, the lower part of the **Q-Tables** is empty, indeed, *states* from 
 
 The plots are jittering up and down. This may seem strange but it's totally fine. Indeed, we switch which one is training and which one only use it **Q-Tables** each *cycle*.
 
-Let's look at the first graph for example. The **Seller** starts, so it is trained when the *cycle* is **even**. When **Seller** is trained, we expect it to act more at random, and in a less optimised manner, so the number of validated offers should decrease (*as well as its wallet in the last graph*).
+Let's look at the first graph for example. The **Seller** starts, so it is trained when the *cycle* is **even**. When **Seller** is training, it acts in a less optimised manner. So the number of validated offers should decrease (*as well as its wallet in the last graph*).
 
 On the other hand, when **Seller** is the trainer, it only uses its **Q-Tables** so we expect it to optimise its actions, so the number of validated offers should get up (*as well as its wallet*).
 
@@ -530,7 +530,7 @@ To simulate a negotiation, we had to go through various processes and understand
 
 We rewrite the problem to *keep it as simple as possible*, and to be able to manage a more complex algorithm on it.
 
-We had to rewrite the classic **Q-Learning Algorithm** and adapt it to our *Concurrent Learning* situation. Such adaptations were made by *DeepMind*, on a much larger scale, to train *AlphaGo*.
+We had to rewrite the classic **Q-Learning Algorithm** and adapt it to our *Concurrent Learning* situation. On a much larger scale, *DeepMind* made similar adaptations to train *AlphaGo*.
 
 What was particularly understanding is how, by working on the subject, *we discovered new areas to look at**. Indeed, what was dark and without expectation first, becomes a *promising field* we had to stop our experimentations because of *time constraints*.
 
