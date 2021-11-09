@@ -28,10 +28,7 @@ class Agent:
 
     def initialise_q_table(self, action_space_size, state_space_size):
         self.exploration_rate = Agent.max_exploration_rate
-        self.transactions_validated = 0
-        self.transactions_rejected = 0
-        self.transactions_validated_list = list()
-        self.transactions_rejected_list = list()
+        self.reset_statistics()
 
         self.action_space_size = action_space_size
         self.state_space_size = state_space_size
@@ -40,6 +37,12 @@ class Agent:
 
         self.reset()
         self.reset_wallet()
+
+    def reset_statistics(self):
+        self.transactions_validated = 0
+        self.transactions_rejected = 0
+        self.transactions_validated_list = list()
+        self.transactions_rejected_list = list()
 
     def reset(self):
         self.state = None

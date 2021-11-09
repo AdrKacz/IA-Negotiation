@@ -2,9 +2,11 @@
 
 *[@AdrKacz](https://github.com/AdrKacz), [@mbeaufre](https://github.com/mbeaufre), Master Artificial Intelligence Ecole Centrale Lyon - Lyon 1*
 
+*If you have any questions or issues, don't hesitate to contact us or to open an Issue or a Pull Request*
+
 ## Run the project
 
->Programs were tested on MacOS, and will work on Linux. If you do run on Windows ... well, at least please use a terminal that can display colour, or `.\legacy\main.py` won't run otherwise.
+>Programs were tested on MacOS, and will work on Linux. If you do run on Windows ... well, at least please use a terminal that can display colour, or `./legacy/main.py` won't run otherwise.
 
 ```
 git clone https://github.com/AdrKacz/IA-Negotiation.git
@@ -16,7 +18,9 @@ python3 main.py
 
 # Dynamic method
 cd rl-python
+python3 -m venv .
 source bin/activate
+pip install -r requirements.txt
 python3 main.py
 ```
 
@@ -30,12 +34,12 @@ We focus on optimising the strategy of the **Seller**, and of the **Buyer**.
 
 An obvious way of tackling the problem will be to define different strategies for **Sellers** and **Agents** and to measure their performance in an **Environment**.
 
-We implement such a way in the `.\legacy` folder, but as you will see, we quickly gave up this approach.
+We implement such a way in the `./legacy` folder, but as you will see, we quickly gave up this approach.
 
 We will use three objects:
-- **Buyer** (*in `.\legacy\buyer.py`*) that defines the **Buyer** strategy in its `act` function.
-- **Seller** (*in `.\legacy\seller.py`*) that defines the **Seller** strategy in its `act` function.
-- **Environment** (*in `.\legacy\environment.py`*) that makes the links between a **Buyer** and a **Seller** and print information in the terminal.
+- **Buyer** (*in `./legacy/buyer.py`*) that defines the **Buyer** strategy in its `act` function.
+- **Seller** (*in `./legacy/seller.py`*) that defines the **Seller** strategy in its `act` function.
+- **Environment** (*in `./legacy/environment.py`*) that makes the links between a **Buyer** and a **Seller** and print information in the terminal.
 
 ## Tool of visualisation
 
@@ -43,7 +47,7 @@ We use the `curses` library to print information in the terminal and refresh it.
 
 We first wrap our `main` function in the `curses.wrapper` to safely get access our terminal screen
 
-We then initialise the screen and the colour used in `.\legacy\main.py`.
+We then initialise the screen and the colour used in `./legacy/main.py`.
 
 At every iteration, the seller acts, then the buyer acts, then the terminal is refreshed. There is a total of `10` iteration because, with the strategies defined, there is no need for more to find an agreement.
 
@@ -129,7 +133,7 @@ def display(self, y_shift=1):
 ```
 `display` function is called at every iteration of the negotiation and displayed as below.
 
-![Legacy Deal](./legacy/exports/legacy-deal.gif)
+![Legacy Deal](./legacy/previews/legacy-deal.gif)
 
 ## Strategies
 
@@ -187,7 +191,7 @@ To obtain something interesting, we decided to not fixed the strategies but inst
 
 We will use a Reinforcement Learning Algorithm to optimise the strategy of the **Buyer** and of the **Seller**.
 
-All the following work is in the `.\rl-python` folder.
+All the following work is in the `./rl-python` folder.
 
 ## Limit the scope
 
@@ -432,6 +436,104 @@ The `train` function of the *environment* has multiple optional parameters.
 
 - *train_agent (`str`):* either `'Seller'` or `'Buyer'`. If `train_both` is enable, defined the `agent` that will be trained first (first *cycle* training). If `train_both` is disable, defined the `agent` to train.
 
+### Testing **Q-Tables**
+
+Testing is really similar to the training. The only difference is that **Q-Tables** are not updated during the process.
+
+## Results
+
+In the code, the *states* are written as *price-of-the-offer-just-received.time-step*. *Initial state* is *s* and *final state* is *d*.
+
+### Both agents trained, **Seller** first
+
+We first trained both agent simultaneously, **Seller** first, then **Buyer** first.
+
+We replace the content of `./rl-python/main.py` with:
+
+```py
+from environment import Environment
+
+if __name__ == '__main__':
+    environment = Environment()
+    print('\n\033[1mBoth Trained - Seller First\033[0m')
+    environment.train(verbose=True, display_plot=True, train_agent='Seller')
+    environment.test()
+```
+
+![Terminal](./rl-python/previews/training-both-seller-first-c-50-e-100-terminal.png)
+
+With the global statistics, we notice that the number of validation is greater than the number of rejection. That makes sense because *agents* earn rewards on successful transactions.
+
+As expected, the lower part of the **Q-Tables** is empty, indeed, *states* from *1.4* to *5.4* cannot lead to a new offer.
+
+![Plot](./rl-python/previews/training-both-seller-first-c-50-e-100.png)
+
+The plots are jittering up and down. This may seems strange but it's totaly fine. Indeed, we switch which one is training and which one only use it **Q-Tables** each *cycle*.
+
+Let's look at the first graph for example. The **Seller** starts, so it is trained when the *cycle* is **even**. When **Seller** is trained, we expect it to act more at random, and in a less optimise manner, so the number of validated offers should decrease (*as well as its wallet in the last graph*).
+
+On the other hand, when **Seller** is the trainer, it only uses its **Q-Tables** so we expect it to optimise its actions, so the number of validated offers should get up (*as well as its wallet*).
+
+This is exactly what we have, re-run the code in your own environment if your not sure about that.
+
+However, the plot reveals a problematic behaviour. Both *agents* seems to converge extremely quickly to a stable state (less than 10 *cycles*, so less than 1000 *episodes*). This is not expected. That reveals that our models may be oversimplified.
+
+Nonetheless, the algorithm is working and we know we could extends it to broader *action space*, *time space*, and larger number of *agents*.
+
+
+### Both agents trained, switching the first
+
+We know look if changing the *first agent* change something in the training.
+
+```py
+from environment import Environment
+
+if __name__ == '__main__':
+    environment = Environment()
+    print('\n\033[1mBoth Trained - Seller First\033[0m')
+    environment.train(verbose=True, display_plot=True, train_agent='Seller')
+    environment.test()
+```
+
+![Terminal](./rl-python/previews/training-both-c-50-e-100-t-1000-terminal.png)
+
+We observe that the *first agent* to be trained is the *agent* that takes the win over time. Indeed, when **Seller** is trained first, it sells for **2846** whereas when **Buyer** is trained first, **Seller** sells for **2681 < 2846**. This patters repeats each time you run the program.
+
+Ideally, this shouldn't happen. Indeed, this means that we have a bias in the training. However, we have no idea how to solve it. Using different values of `num_cycles` and `num_episodes` doesn't change the problem.
+
+On the other hand, we observe the most trained agent, as expected, beat the less trained agent. However this is not what we were looking for, so we will do a last comparaison to check this assumption.
+
+### Only one agent trained, switching the first
+
+```py
+from environment import Environment
+
+if __name__ == '__main__':
+    environment = Environment()
+    print('\n\033[1mBoth Trained - Seller First\033[0m')
+    environment.train(train_both=False, train_agent='Seller')
+    environment.test()
+    print('\n\033[1mBoth Trained - Buyer First\033[0m')
+    environment.train(train_both=False, train_agent='Buyer')
+    environment.test()
+```
+
+![Terminal](./rl-python/previews/training-one-c-50-e-100-t-1000-terminal.png)
+
+Exactly as expected, the *agent* trained clearly outperforms the *agent* not trained. Indeed, when **Seller** is trained, it sells for **2762** whereas when **Buyer** is trained, **Seller** only sells for less than the half, **1255**.
+
+That is a very good results of the algorithm, and we could imagine further research using multiple *agents* trained differently.
+
+## Conclusion
+
+In order to simulate a negotiation, we had to go through various process and understand clearly what is *the core of the problem*.
+
+We rewrite the problem to *keep it as simple as possible*, and so to be able to manage more complex algorithm on it.
+
+We had to rewrite the classic **Q-Learning Algorithm** and adapt it to our *Concurrent Learning* situation. Such adaptation were made by *DeepMind*, in a much larger scale, to train *AlphaGo*.
+
+What was particularly understanding is how, by working on the subject, *we discovered new areas to look at**. Indeed, what was dark and without expectation first, becomes a *promising field* we had to stop our experimentations because of *time constraints*.
+
 ## Further Research
 
 - Enlarge `price_space_size` and `time_space_size`, and see if new significant result appears.
@@ -444,6 +546,10 @@ The `train` function of the *environment* has multiple optional parameters.
 
  > *Potential Result:*  Simulate a mini market place with multi-actors and multi-wallets.
 
-- Instead of limit the number of transactions limit the number of time steps.
+- Instead of limiting the number of transactions limit the number of time steps.
 
  > *Potential Result:*  Infer new behaviour, where closing a transaction earlier is a real improvement in the strategy.
+
+- Use the visualisation made first in `./legacy` to display results of **Q-Learning**.
+
+ > *Potential Result:*  More enjoyable observations.

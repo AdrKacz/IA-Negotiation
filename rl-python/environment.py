@@ -8,6 +8,7 @@ class Environment():
         # Training Information
         self.num_cycles = int(5e1)
         self.num_episodes = int(1e2)
+        self.num_episodes_testing = int(1e3)
 
 
         # Complexity : price_space_size = P , time_space_size = T
@@ -126,7 +127,7 @@ class Environment():
             return
 
         # Display result
-        self.display_statistics(transactions_validated, transactions_rejected)
+        self.display_statistics(self.num_cycles * self.num_episodes, transactions_validated, transactions_rejected)
 
         # Raw Q-Tables
         self.display_q_tables()
@@ -141,11 +142,12 @@ class Environment():
 
     def test(self):
         # Statistics
+        self.seller.reset_statistics(), self.buyer.reset_statistics()
         transactions_validated, transactions_rejected = 0, 0
 
         # Test Seller versus Buyer
         first, second = self.seller, self.buyer
-        for episode in range(self.num_episodes):
+        for episode in range(self.num_episodes_testing):
             self.reset()
             for step in range(self.time_space_size):
                 action_index = first.exploit()
@@ -180,17 +182,17 @@ class Environment():
             first, second = second, first
 
         # Update Statistics
-        assert transactions_validated + transactions_rejected ==  self.num_episodes
+        assert transactions_validated + transactions_rejected ==  self.num_episodes_testing
 
         # Display result
-        self.display_statistics(transactions_validated, transactions_rejected)
+        self.display_statistics(self.num_episodes_testing, transactions_validated, transactions_rejected)
 
         print(f'Seller Wallet: {self.seller.wallet:4>}')
         print(f'Buyer Wallet: {self.buyer.wallet:4>}')
 
-    def display_statistics(self, transactions_validated, transactions_rejected):
+    def display_statistics(self, transactions_total, transactions_validated, transactions_rejected):
         print('\n', '===== ' * 5)
-        print(f'Transactions Total\t: {self.num_episodes:6d}')
+        print(f'Transactions Total\t: {transactions_total:6d}')
         print(f'Transactions Validated\t: {transactions_validated:6d}')
         print(f'Transactions Rejected\t: {transactions_rejected:6d}')
         print('\t\tSeller\t Buyer\t Total')
